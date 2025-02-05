@@ -17,7 +17,7 @@ client.once("ready", () => {
 });
 async function fetchDailyMission() {
   try {
-    const today = new Date().toISOString().split("T")[0]; // Format as YYYY-MM-DD
+    const today = new Date().toISOString().split("T")[0];
     console.log(`Looking for mission for today: ${today}`);
     
     // Find mission for today
@@ -80,8 +80,8 @@ cron.schedule("* * * * *", async () => {
       console.log("No text channels found in the guild!");
       return;
     }
-    const clickHere = "https://www.dcodeblock.com/project-sagas";
-    const learnHere = "https://www.dcodeblock.com/monk-ai";
+    const clickHere = "[projectSaga]"+"(https://www.dcodeblock.com/project-sagas)";
+    const learnHere = "[monk-ai]"+"(https://www.dcodeblock.com/monk-ai)";
     
     const dailyMissions = await fetchDailyMission();
     if (dailyMissions && dailyMissions.length > 0) {
@@ -104,13 +104,13 @@ cron.schedule("* * * * *", async () => {
         content: messageContent,
         allowedMentions: { parse: ['everyone'] }
       });
-      console.log("Daily missions sent successfully:", messageContent);
+      // console.log("Daily missions sent successfully:", messageContent);
     } else {
       await channel.send({
         content: "@everyone 🚫 No daily mission available today. Please check the database.",
         allowedMentions: { parse: ['everyone'] }
       });
-      console.log("No daily mission available message sent.");
+      // console.log("No daily mission available message sent.");
     }
     
 
@@ -136,13 +136,13 @@ cron.schedule("* * * * *", async () => {
         content: messageContent,
         allowedMentions: { parse: ['everyone'] }
       });
-      console.log("Daily missions sent successfully:", messageContent);
+      // console.log("Daily missions sent successfully:", messageContent);
     }  else {
       await channel.send({
         content: "@everyone 🚫 No weekly mission available today. Please check the database.",
         allowedMentions: { parse: ['everyone'] }
       });
-      console.log("No weekly mission available message sent.");
+      // console.log("No weekly mission available message sent.");
     }
 
   } catch (error) {
