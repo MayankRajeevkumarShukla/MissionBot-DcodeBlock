@@ -84,67 +84,56 @@ cron.schedule("* * * * *", async () => {
     const learnHere = "[monk-ai]"+"(https://www.dcodeblock.com/monk-ai)";
     
     const dailyMissions = await fetchDailyMission();
+    const weeklyMission = await fetchWeeklyMission();
+    
+    let messageContent = `GM Bro$kiis, @everyone\n\n`;
+
+    messageContent += `- **Daily missions are live** - 10 Trophies + 20 Yuzus\n`;
+    
     if (dailyMissions && dailyMissions.length > 0) {
-      let messageContent = `@everyone 🎯 **Daily Mission Reminder:**\n`;
-  
       const problemMission = dailyMissions.find(m => m.typeOfMission === "problem");
       const docMission = dailyMissions.find(m => m.typeOfMission === "doc");
-  
+    
       if (problemMission) {
-        const link = problemMission.typeOfMission === "problem" ? clickHere : learnHere;
-        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time} ${link}\n`;
-      }
-  
-      if (docMission) {
-        const link = docMission.typeOfMission === "doc" ? learnHere : clickHere;
-        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time} ${link}\n`;
+        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time} ${clickHere}\n`;
       }
     
-      await channel.send({
-        content: messageContent,
-        allowedMentions: { parse: ['everyone'] }
-      });
-      // console.log("Daily missions sent successfully:", messageContent);
+      if (docMission) {
+        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time} ${learnHere}\n`;
+      }
     } else {
-      await channel.send({
-        content: "@everyone 🚫 No daily mission available today. Please check the database.",
-        allowedMentions: { parse: ['everyone'] }
-      });
-      // console.log("No daily mission available message sent.");
+      messageContent += `🚫 No daily mission available today. Please check the database.\n`;
     }
     
-
-    // Fetch Weekly Mission
-    const weeklyMission = await fetchWeeklyMission();
+    messageContent += `\n- **Do not forget to complete the weekly mission** -\n`;
+    
     if (weeklyMission && weeklyMission.length > 0) {
-      let messageContent = `@everyone 🎯 **Weekly Mission Reminder:**\n`;
-  
       const problemMission = weeklyMission.find(m => m.typeOfMission === "problem");
       const docMission = weeklyMission.find(m => m.typeOfMission === "doc");
-  
+    
       if (problemMission) {
-        const link = problemMission.typeOfMission === "problem" ? clickHere : learnHere;
-        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time[0]}-${problemMission.time[6]} ${link}\n`;
-      }
-  
-      if (docMission) {
-        const link = docMission.typeOfMission === "doc" ? learnHere : clickHere;
-        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time[0]}-${docMission.time[6]} ${link}\n`;
+        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time[0]}-${problemMission.time[6]} ${clickHere}\n`;
       }
     
-      await channel.send({
-        content: messageContent,
-        allowedMentions: { parse: ['everyone'] }
-      });
-      // console.log("Daily missions sent successfully:", messageContent);
-    }  else {
-      await channel.send({
-        content: "@everyone 🚫 No weekly mission available today. Please check the database.",
-        allowedMentions: { parse: ['everyone'] }
-      });
-      // console.log("No weekly mission available message sent.");
+      if (docMission) {
+        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time[0]}-${docMission.time[6]} ${learnHere}\n`;
+      }
+    } else {
+      messageContent += `🚫 No weekly mission available today. Please check the database.\n`;
     }
-
+    
+    // Add the embed only once
+    messageContent += `\nComplete to win awesome benefits : <https://www.dcodeblock.com/>\n\n`;
+    messageContent += `Share a Screenshot on X tagging DcodeBlock with your completed mission alongside a headline and we’ll select the most creative headline for a **10$ USDT giveaway** 🎉\n`;
+    
+    // Send the message
+    await channel.send({
+      content: messageContent,
+      allowedMentions: { parse: ['everyone'] },
+      embeds: [],
+    });
+    
+    
   } catch (error) {
     console.error("Error in cron job:", error);
   }
