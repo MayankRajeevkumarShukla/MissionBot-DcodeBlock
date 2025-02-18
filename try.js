@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const cron = require("node-cron");
 const { connectDB, DailyMission, WeeklyMission } = require("./database");
 
@@ -15,19 +15,20 @@ connectDB();
 client.once("ready", () => {
   console.log(`${client.user.tag} is online!`);
 });
+
 async function fetchDailyMission() {
   try {
     const today = new Date().toISOString().split("T")[0];
     console.log(`Looking for mission for today: ${today}`);
     
     // Find mission for today
-    const mission = await DailyMission.find() ;
+    const mission = await DailyMission.find();
     const date = new Date().toISOString().split("T")[0];
-    const filterData =mission.filter((mission)=>{
-    return mission.time === date
-  })
+    const filterData = mission.filter((mission) => {
+      return mission.time === date;
+    });
 
-    if (!mission) {
+    if (!filterData || filterData.length === 0) {
       console.error("No mission found for today.");
       return null;
     }
@@ -42,18 +43,16 @@ async function fetchDailyMission() {
 
 async function fetchWeeklyMission() {
   try {
-    // const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    // const today = daysOfWeek[new Date().toISOString().split("T")[0]]; 
     const today = new Date().toISOString().split("T")[0];
     console.log(`Looking for weekly mission for today: ${today}`);
+    
     // Find mission for today in the weekly mission's time array
     const mission = await WeeklyMission.find();
-    // console.log(mission)
-    const filtermission = mission.filter((el)=>{
-      return el.time.includes(today)
-    })
+    const filtermission = mission.filter((el) => {
+      return el.time.includes(today);
+    });
 
-    if (!mission) {
+    if (!filtermission || filtermission.length === 0) {
       console.error("No weekly mission found for today.");
       return null;
     }
@@ -65,6 +64,7 @@ async function fetchWeeklyMission() {
     return null;
   }
 }
+
 cron.schedule("* * * * *", async () => {
   console.log("Cron job triggered! Fetching the channel...");
 
@@ -80,14 +80,17 @@ cron.schedule("* * * * *", async () => {
       console.log("No text channels found in the guild!");
       return;
     }
-    const clickHere = "[projectSaga]"+"(https://www.dcodeblock.com/project-sagas)";
-    const learnHere = "[monk-ai]"+"(https://www.dcodeblock.com/monk-ai)";
     
     const dailyMissions = await fetchDailyMission();
     const weeklyMission = await fetchWeeklyMission();
+  
+    const platformEmbed = new EmbedBuilder()
+      .setTitle('DcodeBlock - The Ultimate Developer Platform')
+      .setDescription('AI-powered gamified platform for Web3 learning & building projects, enabling developers to transition & unlock opportunities in web3.')
+      .setURL('https://www.dcodeblock.com/')
+      .setColor('#3498db');
     
     let messageContent = `GM Bro$kiis, @everyone\n\n`;
-
     messageContent += `- **Daily missions are live** - 10 Trophies + 20 Yuzus\n`;
     
     if (dailyMissions && dailyMissions.length > 0) {
@@ -95,11 +98,11 @@ cron.schedule("* * * * *", async () => {
       const docMission = dailyMissions.find(m => m.typeOfMission === "doc");
     
       if (problemMission) {
-        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time} ${clickHere}\n`;
+        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time} [projectSaga](https://www.dcodeblock.com/project-sagas)\n`;
       }
     
       if (docMission) {
-        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time} ${learnHere}\n`;
+        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time} [monk-ai](https://www.dcodeblock.com/monk-ai)\n`;
       }
     } else {
       messageContent += `🚫 No daily mission available today. Please check the database.\n`;
@@ -112,27 +115,22 @@ cron.schedule("* * * * *", async () => {
       const docMission = weeklyMission.find(m => m.typeOfMission === "doc");
     
       if (problemMission) {
-        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time[0]}-${problemMission.time[6]} ${clickHere}\n`;
+        messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time[0]}-${problemMission.time[6]} [projectSaga](https://www.dcodeblock.com/project-sagas)\n`;
       }
     
       if (docMission) {
-        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time[0]}-${docMission.time[6]} ${learnHere}\n`;
+        messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time[0]}-${docMission.time[6]} [monk-ai](https://www.dcodeblock.com/monk-ai)\n`;
       }
     } else {
       messageContent += `🚫 No weekly mission available today. Please check the database.\n`;
     }
-    
-    // Add the embed only once
-    messageContent += `\nComplete to win awesome benefits : <https://www.dcodeblock.com/>\n\n`;
-    messageContent += `Share a Screenshot on X tagging DcodeBlock with your completed mission alongside a headline and we’ll select the most creative headline for a **10$ USDT giveaway** 🎉\n`;
-    
-    // Send the message
+    messageContent += `\nComplete to win awesome benefits!\n\n`;
+    messageContent += `Share a Screenshot on X tagging DcodeBlock with your completed mission alongside a headline and we'll select the most creative headline for a **10$ USDT giveaway** 🎉\n`;
     await channel.send({
       content: messageContent,
       allowedMentions: { parse: ['everyone'] },
-      embeds: [],
+      embeds: [platformEmbed],
     });
-    
     
   } catch (error) {
     console.error("Error in cron job:", error);
