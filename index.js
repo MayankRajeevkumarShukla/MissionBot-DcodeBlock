@@ -1,112 +1,241 @@
 require("dotenv").config();
-const { Client, IntentsBitField } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 const cron = require("node-cron");
 const { connectDB, DailyMission, WeeklyMission } = require("./database");
 
-// Discord Client Setup
+// Create client with necessary intents
 const client = new Client({
-  intents: [IntentsBitField.Flags.Guilds, IntentsBitField.Flags.GuildMessages],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages
+  ]
 });
 
 // Connect to MongoDB
 connectDB();
 
-// Bot Ready Event
+// Enhanced startup function with channel verification
 client.once("ready", () => {
-  console.log(`🤖 ${client.user.tag} is online`);
+  console.log(`${client.user.tag} is online!`);
+  
+  // Log all available guilds and channels for verification
+  console.log("\n=== AVAILABLE GUILDS AND CHANNELS ===");
+  client.guilds.cache.forEach(guild => {
+    console.log(`\nGuild: ${guild.name} (${guild.id})`);
+    let textChannels = 0;
+    
+    guild.channels.cache.forEach(channel => {
+      if (channel.isTextBased()) {
+        console.log(`- Text Channel: ${channel.name} (${channel.id})`);
+        textChannels++;
+      }
+    });
+    
+    if (textChannels === 0) {
+      console.log("  No text channels found in this guild!");
+    }
+  });
+  console.log("\n=====================================");
+  
+  // Verify the channel from .env exists
+  const targetChannelId = process.env.CHANNEL_ID;
+  let foundChannel = false;
+  
+  client.guilds.cache.forEach(guild => {
+    const channel = guild.channels.cache.get(targetChannelId);
+    if (channel) {
+      console.log(`✅ Target channel found: ${channel.name} (${channel.id}) in guild ${guild.name}`);
+      foundChannel = true;
+    }
+  });
+  
+  if (!foundChannel) {
+    console.log(`❌ Channel with ID ${targetChannelId} not found in any guild! Please check the ID and bot permissions.`);
+  }
 });
 
-// Fetch Daily Mission with Debugging
 async function fetchDailyMission() {
   try {
     const today = new Date().toISOString().split("T")[0];
-    console.log(`🔍 Fetching Daily Mission for: ${today}`);
+    console.log(`Looking for mission for today: ${today}`);
+    
+    // Find mission for today
+    const mission = await DailyMission.find();
+    const date = new Date().toISOString().split("T")[0];
+    const filterData = mission.filter((mission) => {
+      return mission.time === date;
+    });
 
-    const mission = await DailyMission.findOne({ time: today });
-
-    if (mission) {
-      console.log(`✅ Daily Mission Found: ${mission.description}`);
-      return mission.description;
-    } else {
-      console.log("⚠️ No Daily Mission found for today.");
+    if (!filterData || filterData.length === 0) {
+      console.error("No mission found for today.");
       return null;
     }
+
+    console.log("Found daily mission:", filterData);
+    return filterData;
   } catch (error) {
-    console.error("❌ Error fetching daily mission:", error.message);
+    console.error("Error fetching daily mission:", error);
     return null;
   }
 }
 
-// Fetch Weekly Mission with Debugging
 async function fetchWeeklyMission() {
   try {
     const today = new Date().toISOString().split("T")[0];
-    console.log(`🔍 Fetching Weekly Mission for: ${today}`);
+    console.log(`Looking for weekly mission for today: ${today}`);
+    
+    // Find mission for today in the weekly mission's time array
+    const mission = await WeeklyMission.find();
+    const filtermission = mission.filter((el) => {
+      return el.time.includes(today);
+    });
 
-    const mission = await WeeklyMission.findOne({ time: today });
-
-    if (mission) {
-      console.log(`✅ Weekly Mission Found: ${mission.description}`);
-      return mission.description;
-    } else {
-      console.log("⚠️ No Weekly Mission found for today.");
+    if (!filtermission || filtermission.length === 0) {
+      console.error("No weekly mission found for today.");
       return null;
     }
+
+    console.log("Found weekly mission:", filtermission);
+    return filtermission;
   } catch (error) {
-    console.error("❌ Error fetching weekly mission:", error.message);
+    console.error("Error fetching weekly mission:", error);
     return null;
   }
 }
 
-// Daily Mission Reminder - Runs Every 5 Minutes
-cron.schedule("*/5 * * * *", async () => {
-  try {
-    console.log("🕒 Running Daily Mission Reminder...");
-
-    const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-    if (!channel) {
-      console.error("❌ Failed to fetch the Discord channel. Check CHANNEL_ID.");
-      return;
+// Function to find channel using multiple methods
+async function findChannel() {
+  // Method 1: Try directly with channel ID from env
+  const targetChannelId = process.env.CHANNEL_ID;
+  
+  for (const guild of client.guilds.cache.values()) {
+    const channelById = guild.channels.cache.get(targetChannelId);
+    if (channelById && channelById.isTextBased()) {
+      console.log(`Found channel by ID: ${channelById.name}`);
+      return channelById;
     }
-
-    const mission = await fetchDailyMission();
-
-    if (mission) {
-      await channel.send(`🎯 **Daily Mission Reminder:** ${mission}`);
-      console.log("✅ Daily mission sent to the channel.");
-    } else {
-      await channel.send("🚫 No daily mission found for today.");
-      console.log("⚠️ No daily mission was sent.");
+  }
+  
+  // Method 2: Try to find a channel by name if specified in env
+  if (process.env.CHANNEL_NAME) {
+    for (const guild of client.guilds.cache.values()) {
+      const channelByName = guild.channels.cache.find(c => 
+        c.name === process.env.CHANNEL_NAME && c.isTextBased());
+      if (channelByName) {
+        console.log(`Found channel by name: ${channelByName.name}`);
+        return channelByName;
+      }
     }
-  } catch (error) {
-    console.error("❌ Error in Daily Mission Cron Job:", error.message);
+  }
+  
+  // Method 3: Fallback to first text channel in first guild
+  const firstGuild = client.guilds.cache.first();
+  if (firstGuild) {
+    const firstChannel = firstGuild.channels.cache.find(c => c.isTextBased());
+    if (firstChannel) {
+      console.log(`Fallback to first available text channel: ${firstChannel.name}`);
+      return firstChannel;
+    }
+  }
+  
+  return null;
+}
+
+// Add test command to manually trigger the message
+client.on('messageCreate', async message => {
+  if (message.content === '!testmission') {
+    console.log("Test command received. Sending mission message...");
+    try {
+      // Use the channel where the command was sent
+      const channel = message.channel;
+      await sendMissionMessage(channel);
+      console.log("Test message sent successfully!");
+    } catch (error) {
+      console.error("Error sending test message:", error);
+    }
   }
 });
 
-// Weekly Mission Reminder - Runs Every 5 Minutes
-cron.schedule("*/5 * * * *", async () => {
-  try {
-    console.log("🕒 Running Weekly Mission Reminder...");
+// Extracted logic for sending the mission message
+async function sendMissionMessage(channel) {
+  if (!channel) {
+    console.error("No valid channel found to send messages to!");
+    return;
+  }
+  
+  const dailyMissions = await fetchDailyMission();
+  const weeklyMission = await fetchWeeklyMission();
 
-    const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-    if (!channel) {
-      console.error("❌ Failed to fetch the Discord channel. Check CHANNEL_ID.");
-      return;
+  const platformEmbed = new EmbedBuilder()
+    .setTitle('DcodeBlock - The Ultimate Developer Platform')
+    .setDescription('AI-powered gamified platform for Web3 learning & building projects, enabling developers to transition & unlock opportunities in web3.')
+    .setURL('https://www.dcodeblock.com/')
+    .setColor('#3498db');
+  
+  let messageContent = `GM Bro$kiis, @everyone\n\n`;
+  messageContent += `- **Daily missions are live** - 10 Trophies + 20 Yuzus\n`;
+  
+  if (dailyMissions && dailyMissions.length > 0) {
+    const problemMission = dailyMissions.find(m => m.typeOfMission === "problem");
+    const docMission = dailyMissions.find(m => m.typeOfMission === "doc");
+  
+    if (problemMission) {
+      messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time} [projectSaga](https://www.dcodeblock.com/project-sagas)\n`;
     }
+  
+    if (docMission) {
+      messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time} [monk-ai](https://www.dcodeblock.com/monk-ai)\n`;
+    }
+  } else {
+    messageContent += `🚫 No daily mission available today. Please check the database.\n`;
+  }
+  
+  messageContent += `\n- **Do not forget to complete the weekly mission** -\n`;
+  
+  if (weeklyMission && weeklyMission.length > 0) {
+    const problemMission = weeklyMission.find(m => m.typeOfMission === "problem");
+    const docMission = weeklyMission.find(m => m.typeOfMission === "doc");
+  
+    if (problemMission) {
+      messageContent += `- **Problem Mission:** ${problemMission.description} ${problemMission.time[0]}-${problemMission.time[6]} [projectSaga](https://www.dcodeblock.com/project-sagas)\n`;
+    }
+  
+    if (docMission) {
+      messageContent += `- **Doc Mission:** ${docMission.description} ${docMission.time[0]}-${docMission.time[6]} [monk-ai](https://www.dcodeblock.com/monk-ai)\n`;
+    }
+  } else {
+    messageContent += `🚫 No weekly mission available today. Please check the database.\n`;
+  }
+  messageContent += `\nComplete to win awesome benefits!\n\n`;
+  messageContent += `Share a Screenshot on X tagging DcodeBlock with your completed mission alongside a headline and we'll select the most creative headline for a **10$ USDT giveaway** 🎉\n`;
+  
+  await channel.send({
+    content: messageContent,
+    allowedMentions: { parse: ['everyone'] },
+    embeds: [platformEmbed],
+  });
+  
+  console.log(`Successfully sent message to channel: ${channel.name} (${channel.id})`);
+}
 
-    const mission = await fetchWeeklyMission();
+// Cron job to send daily message - set to run once a day at 9am
+// Change to * * * * * for testing every minute
+cron.schedule("* * * * *", async () => {
+  console.log("Cron job triggered! Finding channel to send message...");
 
-    if (mission) {
-      await channel.send(`📅 **Weekly Mission Reminder:** ${mission}`);
-      console.log("✅ Weekly mission sent to the channel.");
+  try {
+    const channel = await findChannel();
+    if (channel) {
+      await sendMissionMessage(channel);
     } else {
-      await channel.send("🚫 No weekly mission found for today.");
-      console.log("⚠️ No weekly mission was sent.");
+      console.error("No suitable channel found to send the mission message.");
     }
   } catch (error) {
-    console.error("❌ Error in Weekly Mission Cron Job:", error.message);
+    console.error("Error in cron job:", error);
   }
 });
 
-// Bot Login
-client.login(process.env.DISCORD_TOKEN);
+// Login to Discord
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => console.log("Bot logged in successfully"))
+  .catch(error => console.error("Failed to login:", error));
